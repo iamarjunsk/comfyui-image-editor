@@ -10,7 +10,5 @@ services:
       - ./backend/uploads:/app/uploads
       - ./backend/outputs:/app/outputs
     environment:
-      - COMFYUI_URL=http://host.docker.internal:1111
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - COMFYUI_URL=http://100.97.53.84:1111
     restart: unless-stopped
