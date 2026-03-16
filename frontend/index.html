@@ -349,13 +349,13 @@
             const move = useCallback(clientX => {
                 if (!containerRef.current) return;
                 const r = containerRef.current.getBoundingClientRect();
-                setPos(Math.max(2, Math.min(98, ((clientX - r.left) / r.width) * 100)));
+                setPos(Math.max(0, Math.min(100, ((clientX - r.left) / r.width) * 100)));
             }, []);
 
             useEffect(() => {
                 const up = () => { dragging.current = false; };
                 const mv = e => { if (dragging.current) move(e.clientX); };
-                const tmv = e => { if (dragging.current) move(e.touches[0].clientX); };
+                const tmv = e => { if (dragging.current && e.touches?.[0]) move(e.touches[0].clientX); };
                 window.addEventListener('mouseup', up);
                 window.addEventListener('mousemove', mv);
                 window.addEventListener('touchend', up);
@@ -377,15 +377,13 @@
                     {/* Edited (background) */}
                     <img src={edited} alt="Edited"
                         className="absolute inset-0 w-full h-full object-contain pointer-events-none" />
-                    {/* Original (clipped left) */}
-                    <div className="absolute inset-0 overflow-hidden" style={{ width: `${pos}%` }}>
-                        <img src={original} alt="Original"
-                            className="absolute inset-0 h-full object-contain pointer-events-none"
-                            style={{ width: containerRef.current ? `${containerRef.current.offsetWidth}px` : '100%' }} />
-                    </div>
-                    {/* Slider */}
-                    <div className="absolute top-0 bottom-0 w-[2px] bg-white/80"
-                        style={{ left: `${pos}%` }}>
+                    {/* Original (clipped) */}
+                    <img src={original} alt="Original"
+                        className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+                        style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }} />
+                    {/* Slider handle */}
+                    <div className="absolute top-0 bottom-0 w-1 bg-white cursor-ew-resize"
+                        style={{ left: `${pos}%`, transform: 'translateX(-50%)' }}>
                         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-9 h-9 bg-white rounded-full flex items-center justify-center slider-handle-circle">
                             <Icon name="MoveHorizontal" size={16} className="text-gray-700" />
                         </div>
