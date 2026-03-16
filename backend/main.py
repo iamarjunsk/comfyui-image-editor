@@ -5,7 +5,7 @@ Wraps ComfyUI workflow for AI-powered image editing.
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional
@@ -32,6 +32,7 @@ app.add_middleware(
 # Configuration
 UPLOAD_DIR = Path("uploads")
 OUTPUT_DIR = Path("outputs")
+FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 COMFYUI_URL = os.environ.get("COMFYUI_URL", "http://100.97.53.84:1111")
 
 WORKFLOW_FILE = Path("workflow_api.json")
@@ -58,7 +59,9 @@ def load_workflow_template() -> dict:
         return json.load(f)
 
 
-def modify_workflow(workflow: dict, image_filename: str, prompt: str, settings: dict) -> dict:
+def modify_workflow(
+    workflow: dict, image_filename: str, prompt: str, settings: dict
+) -> dict:
     """
     Modify workflow with user inputs.
 
@@ -89,6 +92,7 @@ def modify_workflow(workflow: dict, image_filename: str, prompt: str, settings: 
         else:
             # Random seed
             import random
+
             wf[sampler_node]["inputs"]["seed"] = random.randint(0, 2**32 - 1)
 
     # Update strength (node 433:75 - CFGNorm)
@@ -212,12 +216,12 @@ async def upload_image_to_comfyui(file_path: str) -> str:
     async with aiohttp.ClientSession() as session:
         data = aiohttp.FormData()
         data.add_field(
-            'image',
-            open(filepath, 'rb'),
+            "image",
+            open(filepath, "rb"),
             filename=filepath.name,
-            content_type='image/png',
+            content_type="image/png",
         )
-        data.add_field('overwrite', 'true')
+        data.add_field("overwrite", "true")
 
         async with session.post(f"{COMFYUI_URL}/upload/image", data=data) as resp:
             if resp.status != 200:
@@ -233,7 +237,9 @@ async def download_from_comfyui(filename: str, dest: Path):
     import aiohttp
 
     async with aiohttp.ClientSession() as session:
-        async with session.get(f"{COMFYUI_URL}/view", params={"filename": filename}) as resp:
+        async with session.get(
+            f"{COMFYUI_URL}/view", params={"filename": filename}
+        ) as resp:
             if resp.status != 200:
                 raise Exception(f"Failed to download image from ComfyUI: {resp.status}")
             with open(dest, "wb") as f:
@@ -260,7 +266,9 @@ async def process_generation(job_id: str, request: GenerateRequest):
             "seed": request.seed,
             "strength": request.strength,
         }
-        modified_workflow = modify_workflow(workflow, comfyui_image_name, request.prompt, settings)
+        modified_workflow = modify_workflow(
+            workflow, comfyui_image_name, request.prompt, settings
+        )
 
         jobs[job_id]["progress"] = 30
 
@@ -306,7 +314,8 @@ async def get_status(job_id: str):
 async def get_history():
     """Get recent completed generations."""
     completed_jobs = [
-        job for job in jobs.values()
+        job
+        for job in jobs.values()
         if job["status"] == "completed" and job.get("output_url")
     ]
     completed_jobs.sort(key=lambda x: x.get("completed_at", datetime.min), reverse=True)
@@ -317,11 +326,55 @@ async def get_history():
                 "job_id": job["job_id"],
                 "output_url": job["output_url"],
                 "prompt": job.get("prompt", ""),
-                "timestamp": job.get("completed_at", "").isoformat() if job.get("completed_at") else None,
+                "timestamp": job.get("completed_at", "").isoformat()
+                if job.get("completed_at")
+                else None,
             }
             for job in completed_jobs[:10]
         ]
     }
+
+
+@app.get("/api/uploads")
+async def list_uploads():
+    """List all uploaded images."""
+    if not UPLOAD_DIR.exists():
+        return {"uploads": []}
+
+    files = []
+    for f in UPLOAD_DIR.iterdir():
+        if f.is_file() and f.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}:
+            files.append(
+                {
+                    "filename": f.name,
+                    "url": f"/uploads/{f.name}",
+                    "size": f.stat().st_size,
+                    "created_at": datetime.fromtimestamp(f.stat().st_ctime).isoformat(),
+                }
+            )
+    files.sort(key=lambda x: x["created_at"], reverse=True)
+    return {"uploads": files}
+
+
+@app.get("/api/outputs")
+async def list_outputs():
+    """List all generated images."""
+    if not OUTPUT_DIR.exists():
+        return {"outputs": []}
+
+    files = []
+    for f in OUTPUT_DIR.iterdir():
+        if f.is_file() and f.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}:
+            files.append(
+                {
+                    "filename": f.name,
+                    "url": f"/outputs/{f.name}",
+                    "size": f.stat().st_size,
+                    "created_at": datetime.fromtimestamp(f.stat().st_ctime).isoformat(),
+                }
+            )
+    files.sort(key=lambda x: x["created_at"], reverse=True)
+    return {"outputs": files}
 
 
 @app.get("/uploads/{filename}")
@@ -359,13 +412,26 @@ async def check_comfyui_connection() -> bool:
     """Check if ComfyUI is running and reachable."""
     try:
         import aiohttp
+
         async with aiohttp.ClientSession() as session:
-            async with session.get(f"{COMFYUI_URL}/system_stats", timeout=aiohttp.ClientTimeout(total=3)) as resp:
+            async with session.get(
+                f"{COMFYUI_URL}/system_stats", timeout=aiohttp.ClientTimeout(total=3)
+            ) as resp:
                 return resp.status == 200
     except Exception:
         return False
 
 
+# Serve frontend
+@app.get("/")
+async def serve_frontend():
+    index_file = FRONTEND_DIR / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file)
+    return HTMLResponse("<h1>Frontend not found</h1>", status_code=404)
+
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

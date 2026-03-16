@@ -1,0 +1,11 @@
+{
+  "appId": "com.qwen.imageeditor",
+  "appName": "Qwen Image Editor",
+  "webDir": "dist",
+  "android": {
+    "allowMixedContent": true
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}

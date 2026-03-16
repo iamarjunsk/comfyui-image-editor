@@ -1,0 +1,25 @@
+{
+  "name": "qwen-image-editor",
+  "version": "1.0.0",
+  "description": "AI-Powered Image Editing App",
+  "main": "index.html",
+  "scripts": {
+    "cap:sync": "npx cap sync",
+    "cap:android": "npx cap add android",
+    "cap:open": "npx cap open android",
+    "build": "echo 'Static site - no build needed'"
+  },
+  "keywords": [
+    "image-editor",
+    "ai",
+    "comfyui"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/cli": "^6.2.1",
+    "@capacitor/core": "^6.0.0"
+  }
+}

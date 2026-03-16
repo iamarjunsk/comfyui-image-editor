@@ -176,20 +176,25 @@
         };
 
         // ------- API Service -------
-        const API_BASE = window.location.port === '5500' || window.location.protocol === 'file:'
-            ? 'http://localhost:8000'
-            : '';
+        const getApiBase = () => {
+            if (window.Capacitor) {
+                return localStorage.getItem('api_server') || 'http://localhost:8000';
+            }
+            return window.location.port === '5500' || window.location.protocol === 'file:'
+                ? 'http://localhost:8000'
+                : '';
+        };
 
         const api = {
             async upload(file) {
                 const fd = new FormData();
                 fd.append('file', file);
-                const res = await fetch(`${API_BASE}/api/upload`, { method: 'POST', body: fd });
+                const res = await fetch(`${getApiBase()}/api/upload`, { method: 'POST', body: fd });
                 if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
                 return res.json();
             },
             async generate(imagePath, prompt, settings) {
-                const res = await fetch(`${API_BASE}/api/generate`, {
+                const res = await fetch(`${getApiBase()}/api/generate`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -205,8 +210,23 @@
                 return res.json();
             },
             async status(jobId) {
-                const res = await fetch(`${API_BASE}/api/status/${jobId}`);
+                const res = await fetch(`${getApiBase()}/api/status/${jobId}`);
                 if (!res.ok) throw new Error(`Status check failed: ${res.status}`);
+                return res.json();
+            },
+            async listUploads() {
+                const res = await fetch(`${getApiBase()}/api/uploads`);
+                if (!res.ok) throw new Error(`Failed to list uploads: ${res.status}`);
+                return res.json();
+            },
+            async listOutputs() {
+                const res = await fetch(`${getApiBase()}/api/outputs`);
+                if (!res.ok) throw new Error(`Failed to list outputs: ${res.status}`);
+                return res.json();
+            },
+            async getHistory() {
+                const res = await fetch(`${getApiBase()}/api/history`);
+                if (!res.ok) throw new Error(`Failed to get history: ${res.status}`);
                 return res.json();
             },
         };
@@ -225,6 +245,15 @@
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
+                        <button onClick={() => {
+                            const url = prompt('Enter server URL:', localStorage.getItem('api_server') || 'http://localhost:8000');
+                            if (url) {
+                                localStorage.setItem('api_server', url);
+                                window.location.reload();
+                            }
+                        }} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
+                            <Icon name="Settings" size={18} className="text-gray-400" />
+                        </button>
                         <span className="tag-pill px-3 py-1 rounded-full text-xs font-medium text-indigo-300">
                             ComfyUI Backend
                         </span>
@@ -441,6 +470,49 @@
             </div>
         );
 
+        // ------- File Gallery -------
+        const FileGallery = ({ uploads, outputs, onSelectUpload, onSelectOutput }) => {
+            const getUrl = (url) => url.startsWith('http') ? url : `${getApiBase()}${url}`;
+            return (
+                <div className="glass-panel rounded-xl p-5 space-y-4">
+                    <h3 className="text-sm font-semibold flex items-center gap-2 text-gray-300">
+                        <Icon name="FolderOpen" size={15} /> Image Library
+                    </h3>
+                    {outputs.length > 0 && (
+                        <div>
+                            <p className="text-[11px] text-gray-500 mb-2 uppercase tracking-wider">Generated</p>
+                            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                                {outputs.map((item, i) => (
+                                    <div key={`out-${i}`} onClick={() => onSelectOutput(item)}
+                                        className="history-card relative aspect-square rounded-lg overflow-hidden cursor-pointer border border-white/[0.05] group">
+                                        <img src={getUrl(item.url)} alt={item.filename}
+                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {uploads.length > 0 && (
+                        <div>
+                            <p className="text-[11px] text-gray-500 mb-2 uppercase tracking-wider">Uploads</p>
+                            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                                {uploads.map((item, i) => (
+                                    <div key={`up-${i}`} onClick={() => onSelectUpload(item)}
+                                        className="history-card relative aspect-square rounded-lg overflow-hidden cursor-pointer border border-white/[0.05] group">
+                                        <img src={getUrl(item.url)} alt={item.filename}
+                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {uploads.length === 0 && outputs.length === 0 && (
+                        <p className="text-xs text-gray-500">No images yet</p>
+                    )}
+                </div>
+            );
+        };
+
         // ------- Empty State -------
         const EmptyState = () => (
             <div className="h-full min-h-[400px] flex flex-col items-center justify-center text-gray-600">
@@ -465,6 +537,19 @@
             const [settings, setSettings] = useState({ steps: 4, cfg: 1, strength: 1, seed: -1 });
             const [history, setHistory] = useState([]);
             const [error, setError] = useState(null);
+            const [uploads, setUploads] = useState([]);
+            const [outputs, setOutputs] = useState([]);
+
+            // Fetch uploads and outputs
+            const fetchGallery = async () => {
+                try {
+                    const [up, out] = await Promise.all([api.listUploads(), api.listOutputs()]);
+                    setUploads(up.uploads || []);
+                    setOutputs(out.outputs || []);
+                } catch (e) { console.error('Failed to fetch gallery:', e); }
+            };
+
+            useEffect(() => { fetchGallery(); }, []);
 
             // Simulated progress
             useEffect(() => {
@@ -484,6 +569,7 @@
                 reader.readAsDataURL(file);
                 setResult(null);
                 setError(null);
+                fetchGallery();
             };
 
             const handleGenerate = async () => {
@@ -519,11 +605,12 @@
                             done = true;
                             const editedUrl = s.output_url.startsWith('http')
                                 ? s.output_url
-                                : `${API_BASE}${s.output_url}`;
+                                : `${getApiBase()}${s.output_url}`;
                             setResult({ original: image, edited: editedUrl, prompt });
                             setHistory(h => [{ original: image, output: editedUrl, prompt, ts: new Date() }, ...h].slice(0, 8));
                             setProgress(100);
                             setStatus('Complete!');
+                            fetchGallery();
                         } else if (s.status === 'failed') {
                             throw new Error(s.error || 'Processing failed');
                         } else {
@@ -568,6 +655,24 @@
                                         setResult({ original: item.original, edited: item.output, prompt: item.prompt });
                                     }} />
                                 )}
+
+                                <FileGallery 
+                                    uploads={uploads} 
+                                    outputs={outputs} 
+                                    onSelectUpload={item => {
+                                        setImage(item.url.startsWith('http') ? item.url : `${getApiBase()}${item.url}`);
+                                        setImageFile(null);
+                                        setUploadedPath(item.filename);
+                                        setResult(null);
+                                    }}
+                                    onSelectOutput={item => {
+                                        const imgUrl = item.url.startsWith('http') ? item.url : `${getApiBase()}${item.url}`;
+                                        setImage(imgUrl);
+                                        setImageFile(null);
+                                        setUploadedPath(item.filename);
+                                        setResult({ original: imgUrl, edited: imgUrl, prompt: '' });
+                                    }}
+                                />
                             </div>
 
                             {/* ---- Right Panel ---- */}
