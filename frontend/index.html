@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Qwen Image Editor — AI-Powered Image Editing</title>
+    <meta name="description" content="Edit images with AI using the Qwen Image Edit model. Upload, describe your edits, and get instant results.">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #08080e;
+            color: #e2e8f0;
+            margin: 0;
+            min-height: 100vh;
+        }
+
+        /* Ambient background blobs */
+        body::before,
+        body::after {
+            content: '';
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(120px);
+            opacity: 0.15;
+            pointer-events: none;
+            z-index: 0;
+        }
+        body::before {
+            width: 600px; height: 600px;
+            background: #6366f1;
+            top: -200px; left: -100px;
+        }
+        body::after {
+            width: 500px; height: 500px;
+            background: #a855f7;
+            bottom: -150px; right: -80px;
+        }
+
+        #root { position: relative; z-index: 1; }
+
+        .gradient-text {
+            background: linear-gradient(135deg, #818cf8 0%, #c084fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .glass-panel {
+            background: rgba(17, 17, 27, 0.7);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .upload-zone {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.06) 0%, rgba(168, 85, 247, 0.06) 100%);
+            border: 2px dashed rgba(99, 102, 241, 0.25);
+            transition: all 0.3s cubic-bezier(.4,0,.2,1);
+        }
+        .upload-zone:hover, .upload-zone.dragover {
+            border-color: rgba(129, 140, 248, 0.7);
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(168, 85, 247, 0.12) 100%);
+            transform: translateY(-1px);
+        }
+
+        .processing-glow {
+            animation: pulse-glow 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(99, 102, 241, 0.4); }
+            50% { box-shadow: 0 0 45px rgba(168, 85, 247, 0.7); }
+        }
+
+        .progress-bar-fill {
+            background: linear-gradient(90deg, #6366f1 0%, #a855f7 50%, #6366f1 100%);
+            background-size: 200% 100%;
+            animation: shimmer 2s ease infinite;
+        }
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        .btn-generate {
+            background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+            box-shadow: 0 4px 24px rgba(99, 102, 241, 0.3);
+            transition: all 0.3s cubic-bezier(.4,0,.2,1);
+        }
+        .btn-generate:hover:not(:disabled) {
+            box-shadow: 0 6px 32px rgba(99, 102, 241, 0.5);
+            transform: translateY(-1px);
+        }
+        .btn-generate:disabled {
+            background: rgba(55, 55, 75, 0.6);
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+
+        .slider-handle-circle {
+            box-shadow: 0 0 0 3px rgba(255,255,255,0.3), 0 4px 16px rgba(0,0,0,0.4);
+        }
+
+        .history-card {
+            transition: all 0.3s cubic-bezier(.4,0,.2,1);
+        }
+        .history-card:hover {
+            transform: scale(1.03);
+            border-color: rgba(129, 140, 248, 0.4);
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: rgba(129, 140, 248, 0.5);
+            box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.1);
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            height: 6px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 3px;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px; height: 16px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #818cf8, #a855f7);
+            cursor: pointer;
+            border: 2px solid rgba(255,255,255,0.15);
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+        }
+
+        .fade-in { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .tag-pill {
+            background: rgba(129, 140, 248, 0.12);
+            border: 1px solid rgba(129, 140, 248, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useCallback } = React;
+
+        // ------- Lucide Icon Wrapper -------
+        const Icon = ({ name, size = 20, className = "" }) => {
+            const ref = useRef(null);
+            useEffect(() => {
+                if (ref.current && lucide[name]) {
+                    ref.current.innerHTML = '';
+                    const svg = lucide.createElement(lucide[name]);
+                    svg.setAttribute('width', size);
+                    svg.setAttribute('height', size);
+                    if (className) svg.setAttribute('class', className);
+                    ref.current.appendChild(svg);
+                }
+            }, [name, size, className]);
+            return <span ref={ref} style={{ display: 'inline-flex', alignItems: 'center' }} />;
+        };
+
+        // ------- API Service -------
+        const API_BASE = window.location.port === '5500' || window.location.protocol === 'file:'
+            ? 'http://localhost:8000'
+            : '';
+
+        const api = {
+            async upload(file) {
+                const fd = new FormData();
+                fd.append('file', file);
+                const res = await fetch(`${API_BASE}/api/upload`, { method: 'POST', body: fd });
+                if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+                return res.json();
+            },
+            async generate(imagePath, prompt, settings) {
+                const res = await fetch(`${API_BASE}/api/generate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        image_path: imagePath,
+                        prompt,
+                        steps: settings.steps ?? 4,
+                        cfg: settings.cfg ?? 1,
+                        seed: settings.seed ?? -1,
+                        strength: settings.strength ?? 1,
+                    }),
+                });
+                if (!res.ok) throw new Error(`Generate failed: ${res.status}`);
+                return res.json();
+            },
+            async status(jobId) {
+                const res = await fetch(`${API_BASE}/api/status/${jobId}`);
+                if (!res.ok) throw new Error(`Status check failed: ${res.status}`);
+                return res.json();
+            },
+        };
+
+        // ------- Header -------
+        const Header = () => (
+            <header className="border-b border-white/[0.06] bg-black/30 backdrop-blur-xl sticky top-0 z-50">
+                <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                            <Icon name="Wand2" size={20} />
+                        </div>
+                        <div>
+                            <h1 className="text-xl font-bold gradient-text tracking-tight">Qwen Image Editor</h1>
+                            <p className="text-[11px] text-gray-500 tracking-wide uppercase">AI-Powered Image Editing</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="tag-pill px-3 py-1 rounded-full text-xs font-medium text-indigo-300">
+                            ComfyUI Backend
+                        </span>
+                    </div>
+                </div>
+            </header>
+        );
+
+        // ------- Upload Zone -------
+        const UploadZone = ({ onUpload, preview }) => {
+            const [drag, setDrag] = useState(false);
+            const inputRef = useRef(null);
+
+            const handle = (file) => {
+                if (file && file.type.startsWith('image/')) onUpload(file);
+            };
+
+            if (preview) {
+                return (
+                    <div className="relative group rounded-2xl overflow-hidden">
+                        <img src={preview} alt="Uploaded" className="w-full h-56 object-cover" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <button onClick={() => onUpload(null)}
+                                className="px-4 py-2 bg-white/10 backdrop-blur rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-white/20 transition-colors">
+                                <Icon name="RotateCcw" size={14} /> Replace Image
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className={`upload-zone rounded-2xl p-8 text-center cursor-pointer ${drag ? 'dragover' : ''}`}
+                    onDragOver={e => { e.preventDefault(); setDrag(true); }}
+                    onDragLeave={() => setDrag(false)}
+                    onDrop={e => { e.preventDefault(); setDrag(false); handle(e.dataTransfer.files[0]); }}
+                    onClick={() => inputRef.current?.click()}>
+                    <input type="file" ref={inputRef} className="hidden" accept="image/*"
+                        onChange={e => handle(e.target.files[0])} />
+                    <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-indigo-500/10 flex items-center justify-center">
+                        <Icon name="Upload" size={28} className="text-indigo-400" />
+                    </div>
+                    <p className="font-semibold text-[15px] mb-1 text-gray-200">Drop your image here</p>
+                    <p className="text-xs text-gray-500">or click to browse · PNG, JPG, WEBP</p>
+                </div>
+            );
+        };
+
+        // ------- Prompt Input -------
+        const PromptInput = ({ value, onChange, onGenerate, loading, hasImage }) => (
+            <div className="space-y-3">
+                <div className="relative">
+                    <textarea value={value} onChange={e => onChange(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) onGenerate(); }}
+                        placeholder="Describe what you want to change… e.g. 'Replace the cat with a golden retriever'"
+                        disabled={loading}
+                        className="w-full h-28 bg-black/30 border border-white/[0.08] rounded-xl p-4 text-white text-sm placeholder-gray-600 resize-none transition-all" />
+                    <span className="absolute bottom-2.5 right-3 text-[10px] text-gray-600">⌘ + Enter</span>
+                </div>
+                <button onClick={onGenerate}
+                    disabled={!hasImage || loading || !value.trim()}
+                    className={`btn-generate w-full py-3.5 rounded-xl font-semibold text-[15px] flex items-center justify-center gap-2.5 ${
+                        (!hasImage || loading || !value.trim()) ? '' : 'text-white'}`}>
+                    {loading ? (
+                        <>
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            Processing…
+                        </>
+                    ) : (
+                        <><Icon name="Sparkles" size={18} /> Generate Edit</>
+                    )}
+                </button>
+            </div>
+        );
+
+        // ------- Settings Panel -------
+        const SettingsPanel = ({ settings, onChange }) => {
+            const [open, setOpen] = useState(false);
+            const S = (label, key, min, max, step = 1, display) => (
+                <div>
+                    <label className="text-[11px] text-gray-500 mb-1 flex justify-between">
+                        <span>{label}</span>
+                        <span className="text-indigo-300">{display ?? settings[key]}</span>
+                    </label>
+                    <input type="range" min={min} max={max} step={step} value={settings[key]}
+                        onChange={e => onChange({ ...settings, [key]: parseFloat(e.target.value) })}
+                        className="w-full" />
+                </div>
+            );
+            return (
+                <div className="glass-panel rounded-xl overflow-hidden">
+                    <button onClick={() => setOpen(!open)}
+                        className="w-full px-4 py-3 flex items-center justify-between text-xs font-medium hover:bg-white/[0.03] transition-colors text-gray-400">
+                        <span className="flex items-center gap-2">
+                            <Icon name="SlidersHorizontal" size={14} /> Advanced Settings
+                        </span>
+                        <Icon name={open ? "ChevronUp" : "ChevronDown"} size={14} />
+                    </button>
+                    {open && (
+                        <div className="px-4 pb-4 pt-3 space-y-4 border-t border-white/[0.05] fade-in">
+                            {S("Steps", "steps", 1, 8)}
+                            {S("CFG Scale", "cfg", 0.5, 3, 0.1)}
+                            {S("Strength", "strength", 0.1, 2, 0.1)}
+                            <div>
+                                <label className="text-[11px] text-gray-500 mb-1 block">Seed <span className="text-gray-600">(−1 = random)</span></label>
+                                <input type="number" value={settings.seed}
+                                    onChange={e => onChange({ ...settings, seed: parseInt(e.target.value) || -1 })}
+                                    className="w-full bg-black/30 border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white" />
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // ------- Image Comparison Slider -------
+        const ImageComparison = ({ original, edited }) => {
+            const [pos, setPos] = useState(50);
+            const containerRef = useRef(null);
+            const dragging = useRef(false);
+
+            const move = useCallback(clientX => {
+                if (!containerRef.current) return;
+                const r = containerRef.current.getBoundingClientRect();
+                setPos(Math.max(2, Math.min(98, ((clientX - r.left) / r.width) * 100)));
+            }, []);
+
+            useEffect(() => {
+                const up = () => { dragging.current = false; };
+                const mv = e => { if (dragging.current) move(e.clientX); };
+                const tmv = e => { if (dragging.current) move(e.touches[0].clientX); };
+                window.addEventListener('mouseup', up);
+                window.addEventListener('mousemove', mv);
+                window.addEventListener('touchend', up);
+                window.addEventListener('touchmove', tmv);
+                return () => {
+                    window.removeEventListener('mouseup', up);
+                    window.removeEventListener('mousemove', mv);
+                    window.removeEventListener('touchend', up);
+                    window.removeEventListener('touchmove', tmv);
+                };
+            }, [move]);
+
+            return (
+                <div ref={containerRef}
+                    className="relative rounded-2xl overflow-hidden cursor-ew-resize select-none bg-black/40"
+                    style={{ aspectRatio: '16/10' }}
+                    onMouseDown={() => dragging.current = true}
+                    onTouchStart={() => dragging.current = true}>
+                    {/* Edited (background) */}
+                    <img src={edited} alt="Edited"
+                        className="absolute inset-0 w-full h-full object-contain pointer-events-none" />
+                    {/* Original (clipped left) */}
+                    <div className="absolute inset-0 overflow-hidden" style={{ width: `${pos}%` }}>
+                        <img src={original} alt="Original"
+                            className="absolute inset-0 h-full object-contain pointer-events-none"
+                            style={{ width: containerRef.current ? `${containerRef.current.offsetWidth}px` : '100%' }} />
+                    </div>
+                    {/* Slider */}
+                    <div className="absolute top-0 bottom-0 w-[2px] bg-white/80"
+                        style={{ left: `${pos}%` }}>
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-9 h-9 bg-white rounded-full flex items-center justify-center slider-handle-circle">
+                            <Icon name="MoveHorizontal" size={16} className="text-gray-700" />
+                        </div>
+                    </div>
+                    {/* Labels */}
+                    <span className="absolute top-3 left-3 px-2.5 py-1 bg-black/50 backdrop-blur-sm rounded-full text-[10px] font-semibold uppercase tracking-wider">Original</span>
+                    <span className="absolute top-3 right-3 px-2.5 py-1 bg-indigo-600/70 backdrop-blur-sm rounded-full text-[10px] font-semibold uppercase tracking-wider">AI Edited</span>
+                </div>
+            );
+        };
+
+        // ------- Progress Bar -------
+        const ProgressBar = ({ progress, status }) => (
+            <div className="glass-panel rounded-xl p-5 space-y-3 fade-in">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-indigo-500/15 flex items-center justify-center processing-glow">
+                            <Icon name="Loader2" size={18} className="text-indigo-400 animate-spin" />
+                        </div>
+                        <div>
+                            <p className="font-semibold text-sm">{status}</p>
+                            <p className="text-[11px] text-gray-500">Processing your image…</p>
+                        </div>
+                    </div>
+                    <span className="text-xl font-bold text-indigo-400 tabular-nums">{progress}%</span>
+                </div>
+                <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+                    <div className="h-full progress-bar-fill rounded-full transition-all duration-500"
+                        style={{ width: `${progress}%` }} />
+                </div>
+                <div className="flex justify-between text-[10px] text-gray-600">
+                    <span>Uploading</span><span>Encoding</span><span>Generating</span><span>Decoding</span>
+                </div>
+            </div>
+        );
+
+        // ------- History Gallery -------
+        const HistoryGallery = ({ items, onSelect }) => (
+            <div className="glass-panel rounded-xl p-5">
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 text-gray-300">
+                    <Icon name="Clock" size={15} /> Recent Generations
+                </h3>
+                <div className="grid grid-cols-2 gap-2.5">
+                    {items.map((item, i) => (
+                        <div key={i} onClick={() => onSelect(item)}
+                            className="history-card relative aspect-square rounded-lg overflow-hidden cursor-pointer border border-white/[0.05] group">
+                            <img src={item.output} alt={item.prompt}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                                <p className="absolute bottom-2 left-2 right-2 text-[10px] text-white line-clamp-2">{item.prompt}</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+
+        // ------- Empty State -------
+        const EmptyState = () => (
+            <div className="h-full min-h-[400px] flex flex-col items-center justify-center text-gray-600">
+                <div className="w-20 h-20 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center mb-5">
+                    <Icon name="ImagePlus" size={36} />
+                </div>
+                <p className="text-base font-medium text-gray-400 mb-1">No image uploaded yet</p>
+                <p className="text-sm text-gray-600">Upload an image and describe your edits to get started</p>
+            </div>
+        );
+
+        // ------- Main App -------
+        const App = () => {
+            const [image, setImage] = useState(null);
+            const [imageFile, setImageFile] = useState(null);
+            const [uploadedPath, setUploadedPath] = useState(null);
+            const [prompt, setPrompt] = useState('');
+            const [loading, setLoading] = useState(false);
+            const [progress, setProgress] = useState(0);
+            const [status, setStatus] = useState('');
+            const [result, setResult] = useState(null);
+            const [settings, setSettings] = useState({ steps: 4, cfg: 1, strength: 1, seed: -1 });
+            const [history, setHistory] = useState([]);
+            const [error, setError] = useState(null);
+
+            // Simulated progress
+            useEffect(() => {
+                if (!loading) { setProgress(0); return; }
+                const id = setInterval(() => {
+                    setProgress(p => p >= 88 ? p : p + Math.random() * 12);
+                }, 900);
+                return () => clearInterval(id);
+            }, [loading]);
+
+            const handleUpload = (file) => {
+                if (!file) { setImage(null); setImageFile(null); setUploadedPath(null); return; }
+                setImageFile(file);
+                setUploadedPath(null);
+                const reader = new FileReader();
+                reader.onload = e => setImage(e.target.result);
+                reader.readAsDataURL(file);
+                setResult(null);
+                setError(null);
+            };
+
+            const handleGenerate = async () => {
+                if (!imageFile || !prompt.trim()) return;
+                setLoading(true);
+                setError(null);
+                setStatus('Uploading image…');
+
+                try {
+                    // Upload
+                    let path = uploadedPath;
+                    if (!path) {
+                        const up = await api.upload(imageFile);
+                        if (!up.success) throw new Error(up.error || 'Upload failed');
+                        path = up.path;
+                        setUploadedPath(path);
+                    }
+
+                    // Generate
+                    setStatus('Queueing to ComfyUI…');
+                    setProgress(20);
+                    const gen = await api.generate(path, prompt, settings);
+                    if (!gen.success) throw new Error(gen.error || 'Generation failed');
+
+                    // Poll
+                    setStatus('Generating edit…');
+                    const jobId = gen.job_id;
+                    let done = false;
+                    while (!done) {
+                        await new Promise(r => setTimeout(r, 1500));
+                        const s = await api.status(jobId);
+                        if (s.status === 'completed') {
+                            done = true;
+                            const editedUrl = s.output_url.startsWith('http')
+                                ? s.output_url
+                                : `${API_BASE}${s.output_url}`;
+                            setResult({ original: image, edited: editedUrl, prompt });
+                            setHistory(h => [{ original: image, output: editedUrl, prompt, ts: new Date() }, ...h].slice(0, 8));
+                            setProgress(100);
+                            setStatus('Complete!');
+                        } else if (s.status === 'failed') {
+                            throw new Error(s.error || 'Processing failed');
+                        } else {
+                            setProgress(p => Math.min(p + 8, 88));
+                        }
+                    }
+                } catch (err) {
+                    setError(err.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div className="min-h-screen">
+                    <Header />
+                    <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+                            {/* ---- Left Panel ---- */}
+                            <div className="lg:col-span-4 space-y-5">
+                                <div className="glass-panel rounded-2xl p-5 space-y-6">
+                                    <div>
+                                        <h2 className="text-sm font-semibold mb-3 flex items-center gap-2 text-gray-300">
+                                            <Icon name="ImagePlus" size={16} className="text-indigo-400" /> Input Image
+                                        </h2>
+                                        <UploadZone onUpload={handleUpload} preview={image} />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-sm font-semibold mb-3 flex items-center gap-2 text-gray-300">
+                                            <Icon name="Pencil" size={16} className="text-purple-400" /> Edit Prompt
+                                        </h2>
+                                        <PromptInput value={prompt} onChange={setPrompt}
+                                            onGenerate={handleGenerate} loading={loading} hasImage={!!image} />
+                                    </div>
+                                    <SettingsPanel settings={settings} onChange={setSettings} />
+                                </div>
+
+                                {history.length > 0 && (
+                                    <HistoryGallery items={history} onSelect={item => {
+                                        setImage(item.original);
+                                        setResult({ original: item.original, edited: item.output, prompt: item.prompt });
+                                    }} />
+                                )}
+                            </div>
+
+                            {/* ---- Right Panel ---- */}
+                            <div className="lg:col-span-8">
+                                <div className="glass-panel rounded-2xl p-5 lg:min-h-[600px]">
+                                    <h2 className="text-sm font-semibold mb-5 flex items-center gap-2 text-gray-300">
+                                        <Icon name="Eye" size={16} className="text-pink-400" /> Preview
+                                    </h2>
+
+                                    {!image && !result && <EmptyState />}
+
+                                    {image && !result && !loading && (
+                                        <div className="rounded-2xl overflow-hidden bg-black/30 fade-in">
+                                            <img src={image} alt="Preview"
+                                                className="w-full object-contain max-h-[550px]" />
+                                        </div>
+                                    )}
+
+                                    {loading && (
+                                        <div className="space-y-5 fade-in">
+                                            <div className="rounded-2xl overflow-hidden bg-black/30 relative">
+                                                <img src={image} alt="Processing"
+                                                    className="w-full object-contain max-h-[380px] blur-sm opacity-40" />
+                                                <div className="absolute inset-0 flex items-center justify-center">
+                                                    <div className="w-16 h-16 border-4 border-indigo-500/30 border-t-indigo-400 rounded-full animate-spin" />
+                                                </div>
+                                            </div>
+                                            <ProgressBar progress={Math.round(progress)} status={status} />
+                                        </div>
+                                    )}
+
+                                    {result && !loading && (
+                                        <div className="space-y-5 fade-in">
+                                            <ImageComparison original={result.original} edited={result.edited} />
+                                            <div className="flex gap-3">
+                                                <a href={result.edited} download="qwen-edited.png"
+                                                    className="flex-1 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm flex items-center justify-center gap-2 transition-colors">
+                                                    <Icon name="Download" size={16} /> Download Result
+                                                </a>
+                                                <button onClick={() => { setResult(null); setPrompt(''); }}
+                                                    className="px-5 py-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-white transition-colors"
+                                                    title="New edit">
+                                                    <Icon name="RefreshCw" size={16} />
+                                                </button>
+                                            </div>
+                                            <div className="p-3.5 bg-white/[0.03] rounded-xl border border-white/[0.05]">
+                                                <p className="text-[11px] text-gray-500 mb-1 uppercase tracking-wider">Prompt</p>
+                                                <p className="text-sm text-gray-200">{result.prompt}</p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {error && (
+                                        <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl flex items-start gap-3 fade-in">
+                                            <Icon name="AlertCircle" size={18} className="text-red-400 mt-0.5" />
+                                            <div>
+                                                <p className="font-medium text-red-300 text-sm">Generation Failed</p>
+                                                <p className="text-xs text-red-400/80 mt-0.5">{error}</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </main>
+                </div>
+            );
+        };
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
