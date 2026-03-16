@@ -229,6 +229,15 @@
                 if (!res.ok) throw new Error(`Failed to get history: ${res.status}`);
                 return res.json();
             },
+            async getComfyUIStatus() {
+                const res = await fetch(`${getApiBase()}/api/comfyui/status`);
+                if (!res.ok) return { connected: false };
+                return res.json();
+            },
+            async startComfyUI() {
+                const res = await fetch(`${getApiBase()}/api/comfyui/start`, { method: 'POST' });
+                return res.json();
+            },
         };
 
         // ------- Header -------
@@ -244,18 +253,9 @@
                             <p className="text-[11px] text-gray-500 tracking-wide uppercase">AI-Powered Image Editing</p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <button onClick={() => {
-                            const url = prompt('Enter server URL:', localStorage.getItem('api_server') || 'http://localhost:8000');
-                            if (url) {
-                                localStorage.setItem('api_server', url);
-                                window.location.reload();
-                            }
-                        }} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
-                            <Icon name="Settings" size={18} className="text-gray-400" />
-                        </button>
-                        <span className="tag-pill px-3 py-1 rounded-full text-xs font-medium text-indigo-300">
-                            ComfyUI Backend
+                    <div className="flex items-center gap-2" id="comfyui-status">
+                        <span className="tag-pill px-3 py-1 rounded-full text-xs font-medium text-gray-400">
+                            Checking ComfyUI...
                         </span>
                     </div>
                 </div>
@@ -743,6 +743,64 @@
         };
 
         ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
+        // Update ComfyUI status in header
+        const getApiBase = () => {
+            return window.location.port === '5500' || window.location.protocol === 'file:'
+                ? 'http://localhost:8000'
+                : '';
+        };
+
+        const updateComfyUIStatus = async () => {
+            const statusEl = document.getElementById('comfyui-status');
+            if (!statusEl) return;
+
+            try {
+                const res = await fetch(`${getApiBase()}/api/comfyui/status`);
+                const data = await res.json();
+
+                if (data.connected) {
+                    statusEl.innerHTML = `
+                        <span class="tag-pill px-3 py-1 rounded-full text-xs font-medium text-green-400 flex items-center gap-1.5">
+                            <span class="w-1.5 h-1.5 bg-green-400 rounded-full"></span>
+                            ComfyUI Connected
+                        </span>
+                    `;
+                } else {
+                    statusEl.innerHTML = `
+                        <button onclick="startComfyUI()" class="tag-pill px-3 py-1 rounded-full text-xs font-medium text-yellow-400 hover:bg-yellow-400/10 flex items-center gap-1.5">
+                            <span class="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-pulse"></span>
+                            Start ComfyUI
+                        </button>
+                    `;
+                }
+            } catch (e) {
+                statusEl.innerHTML = `
+                    <span class="tag-pill px-3 py-1 rounded-full text-xs font-medium text-red-400">
+                        Error
+                    </span>
+                `;
+            }
+        };
+
+        window.startComfyUI = async () => {
+            const statusEl = document.getElementById('comfyui-status');
+            statusEl.innerHTML = `
+                <span class="tag-pill px-3 py-1 rounded-full text-xs font-medium text-yellow-400 flex items-center gap-1.5">
+                    <span class="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-pulse"></span>
+                    Starting...
+                </span>
+            `;
+            try {
+                await fetch(`${getApiBase()}/api/comfyui/start`, { method: 'POST' });
+                setTimeout(updateComfyUIStatus, 3000);
+            } catch (e) {
+                updateComfyUIStatus();
+            }
+        };
+
+        updateComfyUIStatus();
+        setInterval(updateComfyUIStatus, 10000);
     </script>
 </body>
 </html>

@@ -408,6 +408,40 @@ async def health_check():
     }
 
 
+COMFYUI_SCRIPT = os.environ.get(
+    "COMFYUI_SCRIPT", os.path.expanduser("~/start_comfyui.sh")
+)
+
+
+@app.post("/api/comfyui/start")
+async def start_comfyui():
+    """Start ComfyUI if not running."""
+    import subprocess
+
+    if await check_comfyui_connection():
+        return {"success": True, "message": "ComfyUI is already running"}
+
+    try:
+        subprocess.Popen(
+            ["bash", COMFYUI_SCRIPT],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return {"success": True, "message": "Starting ComfyUI..."}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/api/comfyui/status")
+async def comfyui_status():
+    """Get ComfyUI status."""
+    connected = await check_comfyui_connection()
+    return {
+        "connected": connected,
+        "url": COMFYUI_URL,
+    }
+
+
 async def check_comfyui_connection() -> bool:
     """Check if ComfyUI is running and reachable."""
     try:
