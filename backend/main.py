@@ -33,7 +33,7 @@ app.add_middleware(
 UPLOAD_DIR = Path("uploads")
 OUTPUT_DIR = Path("outputs")
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
-COMFYUI_URL = os.environ.get("COMFYUI_URL", "http://100.97.53.84:1111")
+COMFYUI_URL = os.environ.get("COMFYUI_URL", "http://localhost:1111")
 
 WORKFLOW_FILE = Path("workflow_api.json")
 
