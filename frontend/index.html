@@ -745,7 +745,7 @@
         ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 
         // Update ComfyUI status in header
-        const getApiBase = () => {
+        const getApiBaseForStatus = () => {
             return window.location.port === '5500' || window.location.protocol === 'file:'
                 ? 'http://localhost:8000'
                 : '';
@@ -756,7 +756,8 @@
             if (!statusEl) return;
 
             try {
-                const res = await fetch(`${getApiBase()}/api/comfyui/status`);
+                const res = await fetch(`${getApiBaseForStatus()}/api/comfyui/status`);
+                const data = await res.json();
                 const data = await res.json();
 
                 if (data.connected) {
@@ -792,7 +793,7 @@
                 </span>
             `;
             try {
-                await fetch(`${getApiBase()}/api/comfyui/start`, { method: 'POST' });
+                await fetch(`${getApiBaseForStatus()}/api/comfyui/start`, { method: 'POST' });
                 setTimeout(updateComfyUIStatus, 3000);
             } catch (e) {
                 updateComfyUIStatus();
