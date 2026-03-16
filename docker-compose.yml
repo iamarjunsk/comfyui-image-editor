@@ -10,5 +10,5 @@ services:
       - ./backend/uploads:/app/uploads
       - ./backend/outputs:/app/outputs
     environment:
-      - COMFYUI_URL=http://host.docker.internal:1111
+      - COMFYUI_URL=http://localhost:1111
     restart: unless-stopped
