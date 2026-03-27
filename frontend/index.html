@@ -316,7 +316,7 @@
             };
 
             // ------- Header -------
-            const Header = () => (
+            const Header = ({ comfyuiStatus, onStartComfyUI, currentPage, onNavigate }) => (
                 <header className="border-b border-white/[0.06] bg-black/30 backdrop-blur-xl sticky top-0 z-50">
                     <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -332,13 +332,46 @@
                                 </p>
                             </div>
                         </div>
-                        <div
-                            className="flex items-center gap-2"
-                            id="comfyui-status"
-                        >
-                            <span className="tag-pill px-3 py-1 rounded-full text-xs font-medium text-gray-400">
-                                Checking ComfyUI...
-                            </span>
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={() => onNavigate('gallery')}
+                                className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors ${
+                                    currentPage === 'gallery'
+                                        ? 'bg-indigo-500/20 text-indigo-300'
+                                        : 'bg-white/[0.06] text-gray-400 hover:bg-white/[0.1] hover:text-gray-300'
+                                }`}
+                            >
+                                <Icon name="Images" size={16} />
+                                Gallery
+                            </button>
+                            <div className="flex items-center gap-2" id="comfyui-status">
+                                {comfyuiStatus === "checking" && (
+                                    <span className="tag-pill px-3 py-1 rounded-full text-xs font-medium text-gray-400">
+                                        Checking ComfyUI...
+                                    </span>
+                                )}
+                                {comfyuiStatus === "disconnected" && (
+                                    <button
+                                        onClick={onStartComfyUI}
+                                        className="tag-pill px-3 py-1 rounded-full text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-1.5"
+                                    >
+                                        <Icon name="Power" size={12} />
+                                        Start ComfyUI
+                                    </button>
+                                )}
+                                {comfyuiStatus === "connected" && (
+                                    <span className="tag-pill px-3 py-1 rounded-full text-xs font-medium text-green-400 flex items-center gap-1.5">
+                                        <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                                        ComfyUI Ready
+                                    </span>
+                                )}
+                                {comfyuiStatus === "starting" && (
+                                    <span className="tag-pill px-3 py-1 rounded-full text-xs font-medium text-yellow-400 flex items-center gap-1.5">
+                                        <div className="w-3 h-3 border-2 border-yellow-400/30 border-t-yellow-400 rounded-full animate-spin" />
+                                        Starting ComfyUI...
+                                    </span>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </header>
@@ -420,6 +453,12 @@
                 onGenerate,
                 loading,
                 hasImage,
+                onSave,
+                onClear,
+                saved,
+                savedPrompts,
+                onSelectSaved,
+                onDeleteSaved,
             }) => (
                 <div className="space-y-3">
                     <div className="relative">
@@ -441,6 +480,47 @@
                             ⌘ + Enter
                         </span>
                     </div>
+                    {value && (
+                        <div className="flex gap-2">
+                            <button
+                                onClick={onSave}
+                                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${
+                                    saved ? "bg-green-500/20 text-green-400" : "bg-white/[0.06] text-gray-400 hover:bg-white/[0.1] hover:text-gray-300"
+                                }`}
+                            >
+                                {saved ? "✓ Saved" : "Save Prompt"}
+                            </button>
+                            <button
+                                onClick={onClear}
+                                className="px-4 py-2 rounded-lg text-xs font-medium bg-white/[0.06] text-gray-400 hover:bg-white/[0.1] hover:text-red-400 transition-colors"
+                            >
+                                Clear
+                            </button>
+                        </div>
+                    )}
+                    {savedPrompts && savedPrompts.length > 0 && (
+                        <div className="space-y-2">
+                            <p className="text-[10px] text-gray-500 uppercase tracking-wider">Saved Prompts</p>
+                            <div className="space-y-1 max-h-32 overflow-y-auto">
+                                {savedPrompts.map((p, i) => (
+                                    <div key={i} className="flex items-center gap-2 group">
+                                        <button
+                                            onClick={() => onSelectSaved(p)}
+                                            className="flex-1 text-left px-3 py-2 rounded-lg bg-white/[0.03] hover:bg-white/[0.08] text-xs text-gray-300 truncate transition-colors"
+                                        >
+                                            {p}
+                                        </button>
+                                        <button
+                                            onClick={() => onDeleteSaved(i)}
+                                            className="p-1.5 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                            <Icon name="Trash2" size={12} />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                     <button
                         onClick={onGenerate}
                         disabled={!hasImage || loading || !value.trim()}
@@ -667,7 +747,7 @@
             );
 
             // ------- History Gallery -------
-            const HistoryGallery = ({ items, onSelect }) => (
+            const HistoryGallery = ({ items, onPreview }) => (
                 <div className="glass-panel rounded-xl p-5">
                     <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 text-gray-300">
                         <Icon name="Clock" size={15} /> Recent Generations
@@ -676,15 +756,20 @@
                         {items.map((item, i) => (
                             <div
                                 key={i}
-                                onClick={() => onSelect(item)}
-                                className="history-card relative aspect-square rounded-lg overflow-hidden cursor-pointer border border-white/[0.05] group"
+                                className="history-card relative aspect-square rounded-lg overflow-hidden border border-white/[0.05] group"
                             >
                                 <img
                                     src={item.output}
                                     alt={item.prompt}
                                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                                 />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); onPreview && onPreview(item, items, i); }}
+                                    className="absolute top-1 right-1 p-1.5 bg-black/60 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                                >
+                                    <Icon name="Eye" size={14} className="text-white" />
+                                </button>
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                                     <p className="absolute bottom-2 left-2 right-2 text-[10px] text-white line-clamp-2">
                                         {item.prompt}
                                     </p>
@@ -695,12 +780,70 @@
                 </div>
             );
 
+            // ------- Image Preview Modal -------
+            const ImagePreviewModal = ({ images, currentIndex, onClose, onDownload }) => {
+                if (!images || images.length === 0) return null;
+                
+                const current = images[currentIndex];
+                const hasPrev = currentIndex > 0;
+                const hasNext = currentIndex < images.length - 1;
+                
+                return (
+                    <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+                        <div className="relative max-w-4xl w-full max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                            <button
+                                onClick={onClose}
+                                className="absolute -top-10 right-0 text-white/70 hover:text-white"
+                            >
+                                <Icon name="X" size={24} />
+                            </button>
+                            
+                            <div className="relative flex-1 flex items-center justify-center min-h-0">
+                                {hasPrev && (
+                                    <button
+                                        onClick={() => images[currentIndex - 1] && images[currentIndex - 1].setIndex(currentIndex - 1)}
+                                        className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white"
+                                    >
+                                        <Icon name="ChevronLeft" size={24} />
+                                    </button>
+                                )}
+                                
+                                <img
+                                    src={current.url}
+                                    alt={current.filename || "Preview"}
+                                    className="max-w-full max-h-[70vh] object-contain rounded-lg"
+                                />
+                                
+                                {hasNext && (
+                                    <button
+                                        onClick={() => images[currentIndex + 1] && images[currentIndex + 1].setIndex(currentIndex + 1)}
+                                        className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white"
+                                    >
+                                        <Icon name="ChevronRight" size={24} />
+                                    </button>
+                                )}
+                            </div>
+                            
+                            <div className="flex items-center justify-between mt-4 text-white/70">
+                                <span className="text-sm">{currentIndex + 1} / {images.length}</span>
+                                <button
+                                    onClick={() => onDownload(current.url, current.filename)}
+                                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm"
+                                >
+                                    <Icon name="Download" size={16} />
+                                    Download
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
             // ------- File Gallery -------
             const FileGallery = ({
                 uploads,
                 outputs,
-                onSelectUpload,
-                onSelectOutput,
+                onPreview,
             }) => {
                 const getUrl = (url) =>
                     url.startsWith("http") ? url : `${getApiBase()}${url}`;
@@ -709,6 +852,7 @@
                         <h3 className="text-sm font-semibold flex items-center gap-2 text-gray-300">
                             <Icon name="FolderOpen" size={15} /> Image Library
                         </h3>
+                        <div className="max-h-80 overflow-y-auto space-y-4">
                         {outputs.length > 0 && (
                             <div>
                                 <p className="text-[11px] text-gray-500 mb-2 uppercase tracking-wider">
@@ -718,14 +862,19 @@
                                     {outputs.map((item, i) => (
                                         <div
                                             key={`out-${i}`}
-                                            onClick={() => onSelectOutput(item)}
-                                            className="history-card relative aspect-square rounded-lg overflow-hidden cursor-pointer border border-white/[0.05] group"
+                                            className="history-card relative aspect-square rounded-lg overflow-hidden border border-white/[0.05] group"
                                         >
                                             <img
                                                 src={getUrl(item.url)}
                                                 alt={item.filename}
                                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                                             />
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); onPreview && onPreview(item, outputs, i); }}
+                                                className="absolute top-1 right-1 p-1.5 bg-black/60 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                                            >
+                                                <Icon name="Eye" size={14} className="text-white" />
+                                            </button>
                                         </div>
                                     ))}
                                 </div>
@@ -740,14 +889,19 @@
                                     {uploads.map((item, i) => (
                                         <div
                                             key={`up-${i}`}
-                                            onClick={() => onSelectUpload(item)}
-                                            className="history-card relative aspect-square rounded-lg overflow-hidden cursor-pointer border border-white/[0.05] group"
+                                            className="history-card relative aspect-square rounded-lg overflow-hidden border border-white/[0.05] group"
                                         >
                                             <img
                                                 src={getUrl(item.url)}
                                                 alt={item.filename}
                                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                                             />
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); onPreview && onPreview(item, uploads, i); }}
+                                                className="absolute top-1 right-1 p-1.5 bg-black/60 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                                            >
+                                                <Icon name="Eye" size={14} className="text-white" />
+                                            </button>
                                         </div>
                                     ))}
                                 </div>
@@ -758,6 +912,122 @@
                                 No images yet
                             </p>
                         )}
+                        </div>
+                    </div>
+                );
+            };
+
+            // ------- Gallery Page -------
+            const GalleryPage = ({ uploads, outputs, onPreview, onGoHome }) => {
+                const [filter, setFilter] = useState('all');
+                
+                const getUrl = (url) =>
+                    url.startsWith("http") ? url : `${getApiBase()}${url}`;
+
+                const filteredOutputs = filter === 'all' || filter === 'generated' ? outputs : [];
+                const filteredUploads = filter === 'all' || filter === 'uploads' ? uploads : [];
+
+                return (
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+                        <div className="mb-6 flex items-center justify-between">
+                            <div>
+                                <h2 className="text-2xl font-bold gradient-text mb-2">Image Gallery</h2>
+                                <p className="text-gray-400 text-sm">Browse all your uploads and generated images</p>
+                            </div>
+                            <button
+                                onClick={onGoHome}
+                                className="px-4 py-2 rounded-lg text-sm font-medium bg-white/[0.06] text-gray-400 hover:bg-white/[0.1] hover:text-gray-300 flex items-center gap-2 transition-colors"
+                            >
+                                <Icon name="Home" size={16} />
+                                Back to Home
+                            </button>
+                        </div>
+
+                        <div className="flex gap-2 mb-6">
+                            {['all', 'generated', 'uploads'].map((f) => (
+                                <button
+                                    key={f}
+                                    onClick={() => setFilter(f)}
+                                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                        filter === f
+                                            ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                                            : 'bg-white/[0.06] text-gray-400 hover:bg-white/[0.1] border border-transparent'
+                                    }`}
+                                >
+                                    {f.charAt(0).toUpperCase() + f.slice(1)}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="space-y-6">
+                            {filteredOutputs.length > 0 && (
+                                <div className="glass-panel rounded-xl p-5">
+                                    <h3 className="text-sm font-semibold mb-4 flex items-center gap-2 text-gray-300">
+                                        <Icon name="Sparkles" size={15} /> Generated Images
+                                        <span className="ml-2 text-xs text-gray-500">({filteredOutputs.length})</span>
+                                    </h3>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                                        {filteredOutputs.map((item, i) => (
+                                            <div
+                                                key={`out-${i}`}
+                                                className="history-card relative aspect-square rounded-lg overflow-hidden border border-white/[0.05] group cursor-pointer"
+                                                onClick={() => onPreview(item, filteredOutputs, i)}
+                                            >
+                                                <img
+                                                    src={getUrl(item.url)}
+                                                    alt={item.filename}
+                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                />
+                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                    <div className="p-2 bg-white/20 backdrop-blur rounded-lg">
+                                                        <Icon name="Eye" size={20} className="text-white" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {filteredUploads.length > 0 && (
+                                <div className="glass-panel rounded-xl p-5">
+                                    <h3 className="text-sm font-semibold mb-4 flex items-center gap-2 text-gray-300">
+                                        <Icon name="Upload" size={15} /> Uploaded Images
+                                        <span className="ml-2 text-xs text-gray-500">({filteredUploads.length})</span>
+                                    </h3>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                                        {filteredUploads.map((item, i) => (
+                                            <div
+                                                key={`up-${i}`}
+                                                className="history-card relative aspect-square rounded-lg overflow-hidden border border-white/[0.05] group cursor-pointer"
+                                                onClick={() => onPreview(item, filteredUploads, i)}
+                                            >
+                                                <img
+                                                    src={getUrl(item.url)}
+                                                    alt={item.filename}
+                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                />
+                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                    <div className="p-2 bg-white/20 backdrop-blur rounded-lg">
+                                                        <Icon name="Eye" size={20} className="text-white" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {filteredOutputs.length === 0 && filteredUploads.length === 0 && (
+                                <div className="glass-panel rounded-xl p-12 text-center">
+                                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-white/[0.05] flex items-center justify-center">
+                                        <Icon name="ImageOff" size={32} className="text-gray-600" />
+                                    </div>
+                                    <p className="text-gray-400 font-medium">No images found</p>
+                                    <p className="text-gray-600 text-sm mt-1">Upload an image and generate edits to see them here</p>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 );
             };
@@ -779,10 +1049,11 @@
 
             // ------- Main App -------
             const App = () => {
+                const [currentPage, setCurrentPage] = useState('home');
                 const [image, setImage] = useState(null);
                 const [imageFile, setImageFile] = useState(null);
                 const [uploadedPath, setUploadedPath] = useState(null);
-                const [prompt, setPrompt] = useState("");
+                const [prompt, setPrompt] = useState(() => localStorage.getItem("saved_prompt") || "");
                 const [loading, setLoading] = useState(false);
                 const [progress, setProgress] = useState(0);
                 const [status, setStatus] = useState("");
@@ -797,6 +1068,94 @@
                 const [error, setError] = useState(null);
                 const [uploads, setUploads] = useState([]);
                 const [outputs, setOutputs] = useState([]);
+                const [comfyuiStatus, setComfyuiStatus] = useState("checking");
+                const [startingComfyui, setStartingComfyui] = useState(false);
+                const [modalImages, setModalImages] = useState([]);
+                const [modalIndex, setModalIndex] = useState(0);
+                const [showModal, setShowModal] = useState(false);
+                const [promptSaved, setPromptSaved] = useState(false);
+                const [savedPrompts, setSavedPrompts] = useState(() => {
+                    const saved = localStorage.getItem("saved_prompts");
+                    return saved ? JSON.parse(saved) : [];
+                });
+
+                const savePrompt = () => {
+                    if (!prompt.trim()) return;
+                    const updated = [prompt, ...savedPrompts.filter(p => p !== prompt)].slice(0, 10);
+                    setSavedPrompts(updated);
+                    localStorage.setItem("saved_prompts", JSON.stringify(updated));
+                    setPromptSaved(true);
+                    setTimeout(() => setPromptSaved(false), 1500);
+                };
+
+                const clearSavedPrompt = () => {
+                    setPrompt("");
+                };
+
+                const selectSavedPrompt = (p) => {
+                    setPrompt(p);
+                };
+
+                const deleteSavedPrompt = (index) => {
+                    const updated = savedPrompts.filter((_, i) => i !== index);
+                    setSavedPrompts(updated);
+                    localStorage.setItem("saved_prompts", JSON.stringify(updated));
+                };
+
+                // Check ComfyUI status
+                const checkComfyUIStatus = useCallback(async () => {
+                    try {
+                        const s = await api.getComfyUIStatus();
+                        if (s.connected) {
+                            setComfyuiStatus("connected");
+                        } else {
+                            setComfyuiStatus("disconnected");
+                        }
+                    } catch (e) {
+                        setComfyuiStatus("disconnected");
+                    }
+                }, []);
+
+                // Polling for ComfyUI status
+                useEffect(() => {
+                    checkComfyUIStatus();
+                    const interval = setInterval(checkComfyUIStatus, 10000);
+                    return () => clearInterval(interval);
+                }, [checkComfyUIStatus]);
+
+                // Handle start ComfyUI
+                const handleStartComfyUI = async () => {
+                    setComfyuiStatus("starting");
+                    setStartingComfyui(true);
+                    try {
+                        await api.startComfyUI();
+                        setTimeout(() => {
+                            setStartingComfyui(false);
+                            checkComfyUIStatus();
+                        }, 3000);
+                    } catch (e) {
+                        setStartingComfyui(false);
+                        checkComfyUIStatus();
+                    }
+                };
+
+                const openModal = (imageList, index) => {
+                    const images = imageList.map((item, i) => ({
+                        url: item.url.startsWith("http") ? item.url : `${getApiBase()}${item.url}`,
+                        filename: item.filename,
+                        setIndex: (idx) => setModalIndex(idx)
+                    }));
+                    setModalImages(images);
+                    setModalIndex(index);
+                    setShowModal(true);
+                };
+
+                const handleDownload = (url, filename) => {
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = filename || "image.png";
+                    a.click();
+                };
 
                 // Fetch uploads and outputs
                 const fetchGallery = async () => {
@@ -917,94 +1276,133 @@
                     }
                 };
 
+                const navigateToPage = (page) => {
+                    setCurrentPage(page);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                };
+
                 return (
                     <div className="min-h-screen">
-                        <Header />
+                        <Header
+                            comfyuiStatus={comfyuiStatus}
+                            onStartComfyUI={handleStartComfyUI}
+                            currentPage={currentPage}
+                            onNavigate={navigateToPage}
+                        />
+                        {currentPage === 'gallery' ? (
+                            <GalleryPage
+                                uploads={uploads}
+                                outputs={outputs}
+                                onPreview={(item, list, idx) => openModal(list, idx)}
+                                onGoHome={() => navigateToPage('home')}
+                            />
+                        ) : (
                         <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                            <div className="space-y-5 lg:grid lg:grid-cols-12 lg:gap-6 lg:space-y-0">
+                                {/* ---- Mobile: Preview First ---- */}
+                                <div className="lg:hidden space-y-5 order-1">
+                                    <div className="glass-panel rounded-2xl p-5 lg:min-h-[600px]">
+                                        <h2 className="text-sm font-semibold mb-5 flex items-center gap-2 text-gray-300">
+                                            <Icon
+                                                name="Eye"
+                                                size={16}
+                                                className="text-pink-400"
+                                            />{" "}
+                                            Preview
+                                        </h2>
+
+                                        {!image && !result && <EmptyState />}
+
+                                        {image && !result && !loading && (
+                                            <div className="rounded-2xl overflow-hidden bg-black/30 fade-in">
+                                                <img
+                                                    src={image}
+                                                    alt="Preview"
+                                                    className="w-full object-contain max-h-[400px] cursor-pointer"
+                                                    onClick={() => outputs.length > 0 && openModal(outputs.map(o => ({...o, url: o.url.startsWith("http") ? o.url : getApiBase() + o.url})), 0)}
+                                                />
+                                            </div>
+                                        )}
+
+                                        {loading && (
+                                            <div className="space-y-5 fade-in">
+                                                <div className="rounded-2xl overflow-hidden bg-black/30 relative">
+                                                    <img
+                                                        src={image}
+                                                        alt="Processing"
+                                                        className="w-full object-contain max-h-[300px] blur-sm opacity-40"
+                                                    />
+                                                    <div className="absolute inset-0 flex items-center justify-center">
+                                                        <div className="w-16 h-16 border-4 border-indigo-500/30 border-t-indigo-400 rounded-full animate-spin" />
+                                                    </div>
+                                                </div>
+                                                <ProgressBar
+                                                    progress={Math.round(progress)}
+                                                    status={status}
+                                                />
+                                            </div>
+                                        )}
+
+                                        {result && !loading && (
+                                            <div className="space-y-5 fade-in">
+                                                <ImageComparison
+                                                    original={result.original}
+                                                    edited={result.edited}
+                                                />
+                                                <div className="flex gap-3">
+                                                    <a
+                                                        href={result.edited}
+                                                        download="qwen-edited.png"
+                                                        className="flex-1 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm flex items-center justify-center gap-2 transition-colors"
+                                                    >
+                                                        <Icon name="Download" size={16} /> Download
+                                                    </a>
+                                                    <button
+                                                        onClick={() => { setResult(null); setPrompt(""); }}
+                                                        className="px-5 py-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-white"
+                                                    >
+                                                        <Icon name="RefreshCw" size={16} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {error && (
+                                            <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl flex items-start gap-3 fade-in">
+                                                <Icon name="AlertCircle" size={18} className="text-red-400 mt-0.5" />
+                                                <div>
+                                                    <p className="font-medium text-red-300 text-sm">Generation Failed</p>
+                                                    <p className="text-xs text-red-400/80 mt-0.5">{error}</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
                                 {/* ---- Left Panel ---- */}
-                                <div className="lg:col-span-4 space-y-5">
+                                <div className="lg:col-span-4 space-y-5 lg:order-1">
                                     <div className="glass-panel rounded-2xl p-5 space-y-6">
                                         <div>
                                             <h2 className="text-sm font-semibold mb-3 flex items-center gap-2 text-gray-300">
-                                                <Icon
-                                                    name="ImagePlus"
-                                                    size={16}
-                                                    className="text-indigo-400"
-                                                />{" "}
-                                                Input Image
+                                                <Icon name="ImagePlus" size={16} className="text-indigo-400" /> Input Image
                                             </h2>
-                                            <UploadZone
-                                                onUpload={handleUpload}
-                                                preview={image}
-                                            />
+                                            <UploadZone onUpload={handleUpload} preview={image} />
                                         </div>
                                         <div>
                                             <h2 className="text-sm font-semibold mb-3 flex items-center gap-2 text-gray-300">
-                                                <Icon
-                                                    name="Pencil"
-                                                    size={16}
-                                                    className="text-purple-400"
-                                                />{" "}
-                                                Edit Prompt
+                                                <Icon name="Pencil" size={16} className="text-purple-400" /> Edit Prompt
                                             </h2>
-                                            <PromptInput
-                                                value={prompt}
-                                                onChange={setPrompt}
-                                                onGenerate={handleGenerate}
-                                                loading={loading}
-                                                hasImage={!!image}
-                                            />
+                                            <PromptInput value={prompt} onChange={setPrompt} onGenerate={handleGenerate} loading={loading} hasImage={!!image} onSave={savePrompt} onClear={clearSavedPrompt} saved={promptSaved} savedPrompts={savedPrompts} onSelectSaved={selectSavedPrompt} onDeleteSaved={deleteSavedPrompt} />
                                         </div>
-                                        <SettingsPanel
-                                            settings={settings}
-                                            onChange={setSettings}
-                                        />
+                                        <SettingsPanel settings={settings} onChange={setSettings} />
                                     </div>
 
                                     {history.length > 0 && (
                                         <HistoryGallery
                                             items={history}
-                                            onSelect={(item) => {
-                                                setImage(item.original);
-                                                setResult({
-                                                    original: item.original,
-                                                    edited: item.output,
-                                                    prompt: item.prompt,
-                                                });
-                                            }}
+                                            onPreview={(item, list, idx) => openModal(list.map(h => ({ url: h.output, filename: 'generated.png' })), idx)}
                                         />
                                     )}
-
-                                    <FileGallery
-                                        uploads={uploads}
-                                        outputs={outputs}
-                                        onSelectUpload={(item) => {
-                                            setImage(
-                                                item.url.startsWith("http")
-                                                    ? item.url
-                                                    : `${getApiBase()}${item.url}`,
-                                            );
-                                            setImageFile(null);
-                                            setUploadedPath(item.filename);
-                                            setResult(null);
-                                        }}
-                                        onSelectOutput={(item) => {
-                                            const imgUrl = item.url.startsWith(
-                                                "http",
-                                            )
-                                                ? item.url
-                                                : `${getApiBase()}${item.url}`;
-                                            setImage(imgUrl);
-                                            setImageFile(null);
-                                            setUploadedPath(item.filename);
-                                            setResult({
-                                                original: imgUrl,
-                                                edited: imgUrl,
-                                                prompt: "",
-                                            });
-                                        }}
-                                    />
                                 </div>
 
                                 {/* ---- Right Panel ---- */}
@@ -1116,6 +1514,16 @@
                                 </div>
                             </div>
                         </main>
+                        )}
+
+                        {showModal && (
+                            <ImagePreviewModal
+                                images={modalImages}
+                                currentIndex={modalIndex}
+                                onClose={() => setShowModal(false)}
+                                onDownload={handleDownload}
+                            />
+                        )}
                     </div>
                 );
             };
